@@ -1,0 +1,3 @@
+# https://github.com/WhyAskWhy/mysql2sqlite
+
+mysql-connector-python
