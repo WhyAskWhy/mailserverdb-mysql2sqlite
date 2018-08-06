@@ -17,6 +17,7 @@ is in a state of flux, large PRs may be challenging to implement.
 ## Related Projects
 
 - This project: <https://github.com/WhyAskWhy/mysql2sqlite>
+- Dev project: <https://github.com/WhyAskWhy/mysql2sqlite-dev>
 
 - [automated-tickets](https://github.com/WhyAskWhy/automated-tickets)
   - These projects share code/design decisions
