@@ -184,11 +184,11 @@ for key in reversed(config_file_paths):
 
 # Generate configuration setting options
 log.debug(
-    "Passing in these general config file locations for evalution: %s",
+    "Passing in these general config file locations for evaluation: %s",
     general_config_file_candidates)
 
 log.debug(
-    "Passing in these query config file locations for evalution: %s",
+    "Passing in these query config file locations for evaluation: %s",
     query_config_file_candidates)
 
 # Generate configuration setting options
