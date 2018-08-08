@@ -31,6 +31,7 @@ import os.path
 import sqlite3
 import sys
 
+# Used to help enforce order/precedence for config files.
 from collections import OrderedDict
 
 
@@ -159,8 +160,6 @@ general_config_file = 'mysql2sqlite_general.ini'
 query_config_file = 'mysql2sqlite_queries.ini'
 
 # Listed in in order of precedence: first match in list wins
-# https://stackoverflow.com/a/28231217
-# https://www.blog.pythonlibrary.org/2016/03/24/python-201-ordereddict/
 config_file_paths = OrderedDict({
     'envvar_config_file_dir': os.environ.get('MYSQL2SQLITE_CONFIG_DIR', ''),
     'cmdline_config_file_dir': cmdline_config_file_dir,

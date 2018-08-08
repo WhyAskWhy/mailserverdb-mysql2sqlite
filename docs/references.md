@@ -9,6 +9,8 @@
 - <http://docs.python.org/library/datetime.html>
 - <http://stackoverflow.com/questions/4906977/python-environment-variables>
 - <http://stackoverflow.com/questions/15836713/allowing-a-specific-value-for-an-argparse-argument>
+- <https://stackoverflow.com/questions/1867861/dictionaries-how-to-keep-keys-values-in-same-order-as-declared>
+- <https://www.blog.pythonlibrary.org/2016/03/24/python-201-ordereddict/>
 
 ### MySQL/MariaDB
 
