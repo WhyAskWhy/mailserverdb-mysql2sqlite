@@ -162,6 +162,7 @@ query_config_file = 'mysql2sqlite_queries.ini'
 # https://stackoverflow.com/a/28231217
 # https://www.blog.pythonlibrary.org/2016/03/24/python-201-ordereddict/
 config_file_paths = OrderedDict({
+    'envvar_config_file_dir': os.environ.get('MYSQL2SQLITE_CONFIG_DIR', ''),
     'cmdline_config_file_dir': cmdline_config_file_dir,
     'local_config_file_dir':  script_path,
     'user_config_file_dir':  os.path.expanduser('~/.config/mysql2sqlite'),
@@ -183,11 +184,11 @@ for key in reversed(config_file_paths):
 
 # Generate configuration setting options
 log.debug(
-    "Passing in these general config file locations for evalution: %s",
+    "Passing in these general config file locations for evaluation: %s",
     general_config_file_candidates)
 
 log.debug(
-    "Passing in these query config file locations for evalution: %s",
+    "Passing in these query config file locations for evaluation: %s",
     query_config_file_candidates)
 
 # Generate configuration setting options
