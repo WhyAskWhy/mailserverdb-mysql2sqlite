@@ -68,6 +68,19 @@ TODAY = DATE.strftime('%Y-%m-%d')
 # Classes
 #######################################################
 
+# TODO: Consider replacing class/functionality here with Python 3.2+ support for
+# mapping API
+#
+# This support allows accessing a ConfigParser instance as a single
+# dictionary with separate nested dictionaries for each section. In short, the
+# two classes listed here do not appear to be needed any longer?
+#
+# Well, except for perhaps string to boolean conversion?
+#
+# https://pymotw.com/3/configparser/
+# https://docs.python.org/3.5/library/configparser.html#mapping-protocol-access
+
+
 class GeneralSettings(object):
 
     """
@@ -79,18 +92,22 @@ class GeneralSettings(object):
 
         self.log = log.getChild(self.__class__.__name__)
 
-        try:
-            parser = configparser.SafeConfigParser()
-            processed_files = parser.read(config_file_list)
+        parser = configparser.ConfigParser()
+        processed_files = parser.read(config_file_list)
 
-        except configparser.ParsingError as error:
-            self.log.exception("Unable to parse config file: %s", error)
-            sys.exit(1)
-
-        else:
+        if processed_files:
             self.log.debug("CONFIG: Config files processed: %s",
                 processed_files)
+        else:
+            self.log.error("Failure to read config files; "
+                "See provided templates, modify and place in one of the "
+                "supported locations: %s",
+                ", ".join(config_file_list))
 
+            raise IOError("Failure to read config files; "
+                "See provided templates, modify and place in one of the "
+                "supported locations: ",
+                ", ".join(config_file_list))
 
         # Begin building object by creating dictionary member attributes
         # from config file sections/values.
@@ -123,7 +140,7 @@ class GeneralSettings(object):
         except configparser.NoSectionError as error:
 
             self.log.exception("Unable to parse config file: %s", error)
-            sys.exit(1)
+            raise
 
 class QuerySettings(object):
 
@@ -136,17 +153,26 @@ class QuerySettings(object):
 
         self.log = log.getChild(self.__class__.__name__)
 
-        try:
-            parser = configparser.SafeConfigParser()
-            processed_files = parser.read(config_file_list)
+        parser = configparser.SafeConfigParser()
+        processed_files = parser.read(config_file_list)
 
-        except configparser.ParsingError as error:
-            self.log.exception("Unable to parse config file: %s", error)
-            sys.exit(1)
+        # We've reached this point if no errors were thrown attempting
+        # to read the list of config files. We now need to count the
+        # number of parsed files and if zero, attempt to resolve why.
 
-        else:
+        if processed_files:
             self.log.debug("CONFIG: Config files processed: %s",
                 processed_files)
+        else:
+            self.log.error("Failure to read config files; "
+                "See provided templates, modify and place in one of the "
+                "supported locations: %s",
+                ", ".join(config_file_list))
+
+            raise IOError("Failure to read config files; "
+                "See provided templates, modify and place in one of the "
+                "supported locations: ",
+                ", ".join(config_file_list))
 
         # Setup an empty dictionary that we'll then populate with nested
         # dictionaries
@@ -164,8 +190,10 @@ class QuerySettings(object):
 
             except configparser.NoSectionError as error:
 
-                self.log.exception("Unable to parse config file: %s", error)
-                sys.exit(1)
+                self.log.exception(
+                    "Unable to parse '%s' section of config file: %s",
+                    section, error)
+                raise
 
 class ConsoleFilterFunc(logging.Filter):
 
@@ -179,21 +207,34 @@ class ConsoleFilterFunc(logging.Filter):
         #print("Just proving that this function is being called")
 
     def filter(self, record):
-        if self.settings.flags['display_console_error_messages'] and record.levelname == 'ERROR':
-            #print("Error messages enabled")
-            return True
-        if self.settings.flags['display_console_warning_messages'] and record.levelname == 'WARNING':
-            #print("Warning messages enabled")
-            return True
-        if self.settings.flags['display_console_info_messages'] and record.levelname == 'INFO':
-            #print("Info messages enabled")
-            return True
-        if self.settings.flags['display_console_debug_messages'] and record.levelname == 'DEBUG':
-            #print("Debug messages enabled")
-            return True
+
+        # If filter is not passed a settings object then fall back
+        # to default values. This may occur if the configuration files are
+        # not able to be read for one reason or another. In that situation
+        # we want the error output to be as verbose as possible.
+        if self.settings:
+            if self.settings.flags['display_console_error_messages'] and record.levelname == 'ERROR':
+                #print("Error messages enabled")
+                return True
+            if self.settings.flags['display_console_warning_messages'] and record.levelname == 'WARNING':
+                #print("Warning messages enabled")
+                return True
+            if self.settings.flags['display_console_info_messages'] and record.levelname == 'INFO':
+                #print("Info messages enabled")
+                return True
+            if self.settings.flags['display_console_debug_messages'] and record.levelname == 'DEBUG':
+                #print("Debug messages enabled")
+                return True
+            else:
+                #print("No matches")
+                return False
         else:
-            #print("No matches")
-            return False
+            # Go with hard-coded default of displaying warning and error
+            # messages until the settings object has been defined.
+            if record.levelname == 'ERROR':
+                return True
+            if record.levelname == 'WARNING':
+                return True
 
 #######################################################
 # Functions

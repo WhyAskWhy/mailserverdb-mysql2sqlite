@@ -23,6 +23,7 @@ Query MySQL database, mirror relevant tables to a local SQLite database.
 
 # parse command line arguments, 'sys.argv'
 import argparse
+import configparser
 import logging
 import logging.handlers
 import os
@@ -30,13 +31,15 @@ import os.path
 import sqlite3
 import sys
 
+from collections import OrderedDict
+
 
 app_name = 'mysql2sqlite'
 
 # TODO: Configure formatter to log function/class info
-syslog_formatter = logging.Formatter('%(name)s - %(levelname)s - %(funcName)s - %(message)s')
-file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
-stdout_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s')
+syslog_formatter = logging.Formatter('%(name)s - L%(lineno)d - %(levelname)s - %(funcName)s - %(message)s')
+file_formatter = logging.Formatter('%(asctime)s - %(name)s - L%(lineno)d - %(funcName)s - %(levelname)s - %(message)s')
+stdout_formatter = logging.Formatter('%(asctime)s - %(name)s - L%(lineno)d - %(levelname)s - %(funcName)s - %(message)s')
 
 # Grab root logger and set initial logging level
 root_logger = logging.getLogger()
@@ -82,6 +85,34 @@ log = app_logger.getChild(__name__)
 log.debug("Logging initialized for %s", __name__)
 
 
+########################################################
+# Collect command-line arguments (e.g., passed by Cron)
+########################################################
+
+parser = argparse.ArgumentParser(
+    # Borrow docstring for this module
+    description=__doc__.strip()
+    )
+
+parser.add_argument(
+    '--config_file_dir',
+    action='store',
+    required=False,
+    help='The directory path containing general and query config files.')
+
+try:
+    log.info('Parsing commandline options')
+    args = parser.parse_args()
+except argparse.ArgumentError as error:
+    log.exception("Unable to parse command-line arguments: %s", error)
+    sys.exit(1)
+
+if args.config_file_dir is not None:
+    cmdline_config_file_dir = args.config_file_dir
+else:
+    cmdline_config_file_dir = ""
+
+
 ########################################
 # Modules - Third party
 ########################################
@@ -115,7 +146,7 @@ log.debug("Finished importing standard modules and our custom library modules.")
 # CONSTANTS - Modify INI config files instead
 #######################################################
 
-# Where this script being called from. We will try to load local copies of all
+# Where this script is called from. We will try to load local copies of all
 #  dependencies from this location first before falling back to default
 # locations in order to support having all of the files bundled together for
 # testing and portable use.
@@ -124,27 +155,31 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 # The name of this script used (as needed) by error/debug messages
 script_name = os.path.basename(sys.argv[0])
 
-# Read in configuration file. Attempt to read local copy first, then
-# fall back to using the copy provided by SVN+Symlinks
+general_config_file = 'mysql2sqlite_general.ini'
+query_config_file = 'mysql2sqlite_queries.ini'
 
-# TODO: Replace with command-line options
-default_config_file_dir = '/etc/whyaskwhy.org/mysql2sqlite/config'
+# Listed in in order of precedence: first match in list wins
+# https://stackoverflow.com/a/28231217
+# https://www.blog.pythonlibrary.org/2016/03/24/python-201-ordereddict/
+config_file_paths = OrderedDict({
+    'cmdline_config_file_dir': cmdline_config_file_dir,
+    'local_config_file_dir':  script_path,
+    'user_config_file_dir':  os.path.expanduser('~/.config/mysql2sqlite'),
+    'default_config_file_dir': '/etc/mysql2sqlite',
+})
 
-general_config_file = {}
-general_config_file['name'] = 'mysql2sqlite_general.ini'
-general_config_file['local'] = os.path.join(script_path, general_config_file['name'])
-general_config_file['global'] = os.path.join(default_config_file_dir, general_config_file['name'])
+general_config_file_candidates = []
+query_config_file_candidates = []
+for key in reversed(config_file_paths):
 
-queries_config_file = {}
-queries_config_file['name'] = 'mysql2sqlite_queries.ini'
-queries_config_file['local'] = os.path.join(script_path, queries_config_file['name'])
-queries_config_file['global'] = os.path.join(default_config_file_dir, queries_config_file['name'])
+     general_config_file_candidates.append(
+         os.path.join(config_file_paths[key], general_config_file))
+
+     query_config_file_candidates.append(
+         os.path.join(config_file_paths[key], query_config_file))
 
 # Prefer the local copy over the "global" one by loading it last (where the
 # second config file overrides or "shadows" settings from the first)
-general_config_file_candidates = [general_config_file['global'], general_config_file['local']]
-
-queries_config_file_candidates = [queries_config_file['global'], queries_config_file['local']]
 
 # Generate configuration setting options
 log.debug(
@@ -153,17 +188,42 @@ log.debug(
 
 log.debug(
     "Passing in these query config file locations for evalution: %s",
-    queries_config_file_candidates)
+    query_config_file_candidates)
 
 # Generate configuration setting options
 log.info('Parsing config files')
-general_settings = m2slib.GeneralSettings(general_config_file_candidates)
-query_settings = m2slib.QuerySettings(queries_config_file_candidates)
+
+# Apply handler early so that console logging is enabled prior to parsing
+# configuration files. The provided filter configuration allows logging
+# warning and error messages only while the settings object has yet to be
+# defined.
+app_logger.addHandler(console_handler)
+console_handler.addFilter(m2slib.ConsoleFilterFunc(settings=None))
+
+try:
+    general_settings = m2slib.GeneralSettings(general_config_file_candidates)
+except configparser.NoSectionError as error:
+    log.exception("Error parsing configuration file: %s", error)
+    sys.exit(1)
+except IOError as error:
+    log.exception("Error reading configuration file: %s", error)
+    sys.exit(1)
+
+try:
+    query_settings = m2slib.QuerySettings(query_config_file_candidates)
+except configparser.NoSectionError as error:
+    log.exception("Error parsing configuration file: %s", error)
+    sys.exit(1)
+except IOError as error:
+    log.exception("Error reading configuration file: %s", error)
+    sys.exit(1)
+
 
 # Now that the settings object has been properly created, lets use it to
 # finish configuring console logging for the main application logger.
+console_handler.removeFilter(m2slib.ConsoleFilterFunc)
 console_handler.addFilter(m2slib.ConsoleFilterFunc(settings=general_settings))
-app_logger.addHandler(console_handler)
+
 
 ####################################################################
 # Troubleshooting config file flag boolean conversion
